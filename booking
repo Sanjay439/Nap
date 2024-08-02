@@ -1,0 +1,48 @@
+import { Request, Response } from 'express';
+import Booking from '../models/Booking';
+import Event from '../models/Event';
+
+export const bookTickets = async (req: Request, res: Response) => {
+  try {
+    const { userId, quantity, eventId } = req.body;
+
+    if (quantity > 15) {
+      return res.status(400).json({ message: 'Cannot book more than 15 tickets at a time' });
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+    if (event.totalTickets - event.bookedTickets < quantity) {
+      return res.status(400).json({ message: 'Not enough tickets available' });
+    }
+
+    event.bookedTickets += quantity;
+    await event.save();
+
+    const booking = new Booking({ userId, quantity, eventId });
+    await booking.save();
+
+    res.status(201).json(booking);
+  } catch (error) {
+    res.status(500).json({ message: 'Error booking tickets', error });
+  }
+};
+
+export const cancelBooking = async (req: Request, res: Response) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+    const event = await Event.findById(booking.eventId);
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    event.bookedTickets -= booking.quantity;
+    await event.save();
+
+    await booking.remove();
+    res.status(200).json({ message: 'Booking cancelled' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error cancelling booking', error });
+  }
+};
+
